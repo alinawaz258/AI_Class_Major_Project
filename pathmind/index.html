@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PathMind — RL Route Intelligence</title>
+
+  <!-- Leaflet CSS (map library) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+
+  <!-- Our CSS -->
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <!-- ═══ TOP BAR ═══ -->
+  <div id="topbar">
+    <div id="brand">
+      <div id="brand-icon"><span>PM</span></div>
+      <span id="brand-name">PathMind</span>
+      <span id="brand-tag">RL AGENT</span>
+    </div>
+    <div id="searchbar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="11" cy="11" r="7"/>
+        <path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input id="search-txt" placeholder="Select a city and train the agent…" readonly/>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-shrink:0;">
+      <div class="hst"><div class="hl">Episode</div><div class="hv live" id="h-ep">0</div></div>
+      <div class="hst"><div class="hl">Reward</div><div class="hv" id="h-rew">—</div></div>
+      <div class="hst"><div class="hl">Success</div><div class="hv" id="h-suc">—</div></div>
+      <div class="hst"><div class="hl">Epsilon</div><div class="hv" id="h-eps">1.000</div></div>
+      <div id="pill"><div class="dot"></div><span id="pill-txt">IDLE</span></div>
+    </div>
+  </div>
+
+  <!-- ═══ MAIN LAYOUT ═══ -->
+  <div id="layout">
+
+    <!-- ── LEFT SIDEBAR ── -->
+    <div id="left">
+
+      <!-- City selector -->
+      <div class="sec">
+        <div class="slbl">Choose City</div>
+        <div class="city-grid">
+          <div class="city-card on" onclick="setCity('bangalore',this)">
+            <div class="cc-name">🏙 Bangalore</div>
+            <div class="cc-sub">MG Rd → Whitefield</div>
+          </div>
+          <div class="city-card" onclick="setCity('chennai',this)">
+            <div class="cc-name">🌊 Chennai</div>
+            <div class="cc-sub">Marina → Anna Nagar</div>
+          </div>
+          <div class="city-card" onclick="setCity('delhi',this)">
+            <div class="cc-name">🏛 Delhi</div>
+            <div class="cc-sub">CP → Dwarka</div>
+          </div>
+          <div class="city-card" onclick="setCity('mumbai',this)">
+            <div class="cc-name">🌆 Mumbai</div>
+            <div class="cc-sub">CST → Bandra</div>
+          </div>
+          <div class="city-card" onclick="setCity('hyderabad',this)">
+            <div class="cc-name">💎 Hyderabad</div>
+            <div class="cc-sub">Charminar → HITEC</div>
+          </div>
+          <div class="city-card" onclick="setCity('kolkata',this)">
+            <div class="cc-name">🌉 Kolkata</div>
+            <div class="cc-sub">Howrah → Salt Lake</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="sec">
+        <div class="slbl">Agent Controls</div>
+        <button class="btn go" id="btn-train" onclick="startTraining()">
+          <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          Learn &amp; Find Route
+        </button>
+        <button class="btn rep" id="btn-show" onclick="replayRoute()" disabled>
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 .49-3.45"/>
+          </svg>
+          Replay Best Route
+        </button>
+        <button class="btn rst" onclick="doReset()">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+            <path d="M3 3v5h5"/>
+          </svg>
+          Reset
+        </button>
+      </div>
+
+      <!-- Parameters -->
+      <div class="sec">
+        <div class="slbl">Parameters</div>
+        <div class="slrow">
+          <div class="slhead"><label>Episodes</label><span class="slv" id="vl-ep">1500</span></div>
+          <input type="range" id="sl-ep" min="300" max="4000" step="100" value="1500"
+            oninput="document.getElementById('vl-ep').textContent=this.value"/>
+        </div>
+        <div class="slrow">
+          <div class="slhead"><label>Alpha α</label><span class="slv" id="vl-al">0.25</span></div>
+          <input type="range" id="sl-al" min="0.05" max="0.8" step="0.05" value="0.25"
+            oninput="document.getElementById('vl-al').textContent=parseFloat(this.value).toFixed(2)"/>
+        </div>
+        <div class="slrow">
+          <div class="slhead"><label>Gamma γ</label><span class="slv" id="vl-ga">0.95</span></div>
+          <input type="range" id="sl-ga" min="0.7" max="0.99" step="0.01" value="0.95"
+            oninput="document.getElementById('vl-ga').textContent=parseFloat(this.value).toFixed(2)"/>
+        </div>
+        <div class="slrow">
+          <div class="slhead"><label>Speed</label><span class="slv" id="vl-sp">Fast</span></div>
+          <input type="range" id="sl-sp" min="0" max="4" step="1" value="2"
+            oninput="document.getElementById('vl-sp').textContent=['Slow','Normal','Fast','Turbo','Max'][this.value]"/>
+        </div>
+      </div>
+
+      <!-- Overlay -->
+      <div class="sec">
+        <div class="slbl">Map Overlay — What the AI Learned</div>
+        <div class="ovlrow">
+          <button class="ovlbtn on" id="ov-none" onclick="setOvl('none')">None</button>
+          <button class="ovlbtn"    id="ov-q"    onclick="setOvl('q')">Q-Values</button>
+          <button class="ovlbtn"    id="ov-v"    onclick="setOvl('v')">Heatmap</button>
+          <button class="ovlbtn"    id="ov-p"    onclick="setOvl('p')">Policy</button>
+        </div>
+        <div id="ovl-explain" style="margin-top:8px;padding:8px 10px;background:var(--dim);border-radius:6px;font-size:10.5px;color:var(--muted);line-height:1.7;min-height:36px;">
+          Select an overlay to see what the AI learned.
+        </div>
+      </div>
+
+      <!-- Draggable pins info -->
+      <div class="sec">
+        <div class="slbl">Start &amp; End Points</div>
+        <div style="padding:8px 10px;background:#e8f0fe;border:1px solid #aecbfa;border-radius:8px;font-size:11px;color:#1557b0;line-height:1.7;">
+          <strong>🖱 Drag the S and G pins</strong> anywhere on the map to set your own start and end points.<br>
+          Then retrain — the AI learns from scratch for the new route.
+        </div>
+        <div style="margin-top:6px;font-size:10px;color:var(--muted);line-height:1.6;">
+          Current: <span id="lbl-start" style="color:var(--text);font-weight:500;">—</span><br>
+          → <span id="lbl-end" style="color:var(--text);font-weight:500;">—</span>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="sec">
+        <div class="slbl">Route Legend</div>
+        <div class="leg-row">
+          <div class="leg-line" style="width:28px;height:5px;background:#1a73e8;border-radius:3px;"></div>
+          <div class="leg-lbl" style="color:var(--blue);font-weight:500;">AI Q-Learning</div>
+        </div>
+        <div class="leg-row">
+          <div class="leg-line" style="width:28px;height:4px;background:#d93025;border-radius:3px;"></div>
+          <div class="leg-lbl">Naive BFS</div>
+        </div>
+        <div class="leg-row">
+          <div class="leg-line" style="width:28px;height:4px;background:#e37400;border-radius:3px;"></div>
+          <div class="leg-lbl">Dijkstra</div>
+        </div>
+        <div style="margin-top:7px;padding:7px 10px;background:var(--dim);border-radius:6px;font-size:10px;color:var(--muted);line-height:1.6;">
+          All routes follow <strong style="color:var(--text)">real roads</strong> via OSRM. Start &amp; Goal are ~5–8km apart.
+        </div>
+      </div>
+
+      <!-- Console log -->
+      <div class="sec" style="flex:1;">
+        <div class="slbl">Console</div>
+        <div id="logbox"></div>
+      </div>
+    </div>
+
+    <!-- ── MAP ── -->
+    <div id="mapwrap">
+      <div id="map"></div>
+      <div id="progress-bar"></div>
+      <div id="toast">Select a city → click ▶ Learn &amp; Find Route</div>
+      <div id="lring"></div>
+    </div>
+
+    <!-- ── RIGHT PANEL ── -->
+    <div id="right">
+      <div class="tabs">
+        <div class="tab on" onclick="switchTab('training')">Training</div>
+        <div class="tab"    onclick="switchTab('analysis')">Route Analysis</div>
+        <div class="tab"    onclick="switchTab('guide')">Guide</div>
+      </div>
+
+      <!-- Training tab -->
+      <div class="panel on" id="panel-training">
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.9px;margin-bottom:6px;font-weight:600;">
+          Reward Over Time
+        </div>
+        <canvas id="rchart"></canvas>
+        <div id="kvblock">
+          <div class="kv"><span class="kk">Phase</span>          <span class="kv2"    id="kv-phase">Idle</span></div>
+          <div class="kv"><span class="kk">Episodes</span>        <span class="kv2 hi" id="kv-ep">0</span></div>
+          <div class="kv"><span class="kk">Best reward</span>     <span class="kv2"    id="kv-rew">—</span></div>
+          <div class="kv"><span class="kk">Successes</span>       <span class="kv2"    id="kv-suc">0</span></div>
+          <div class="kv"><span class="kk">Epsilon ε</span>       <span class="kv2"    id="kv-eps">1.000</span></div>
+          <div class="kv"><span class="kk">Nodes in Q-table</span><span class="kv2"    id="kv-qt">0</span></div>
+        </div>
+        <div style="margin-top:12px;background:var(--ui);border-radius:8px;padding:12px;border:1px solid var(--border);font-size:11.5px;color:var(--muted);line-height:1.85;">
+          <strong style="color:var(--text)">Watch the map</strong> during training:<br><br>
+          <span style="color:#ea4335;font-weight:600;">🔴 Red dashed trail</span> = agent wandering randomly (ε≈1.0)<br><br>
+          <span style="color:#e37400;font-weight:600;">🟡 Shorter trails</span> = agent starting to learn (ε≈0.5)<br><br>
+          <span style="color:#34a853;font-weight:600;">🟢 Green trail</span> = agent found efficient route (ε≈0.1)<br><br>
+          <strong style="color:var(--blue)">Bellman update each step:</strong><br>
+          <span style="font-family:'JetBrains Mono';font-size:10px;color:#1557b0;">Q(s,a) ← Q(s,a) + α[r + γ·maxQ(s') − Q(s,a)]</span>
+        </div>
+      </div>
+
+      <!-- Analysis tab -->
+      <div class="panel" id="panel-analysis">
+        <div id="ana-ph" style="text-align:center;padding:50px 16px;color:var(--muted);font-size:12px;line-height:2;">
+          Run the agent first.<br><br>
+          A full <strong style="color:var(--blue)">route analysis</strong> will appear here.
+        </div>
+        <div id="ana-cnt" style="display:none;">
+          <div class="ecard">
+            <div class="ecard-title">
+              <svg width="14" height="14" fill="var(--blue)" viewBox="0 0 24 24">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+              </svg>
+              Why This Route?
+            </div>
+            <div class="ecard-body" id="ana-why"></div>
+          </div>
+          <div class="ecard">
+            <div class="ecard-title">
+              <svg width="13" height="13" fill="none" stroke="#1e8e3e" stroke-width="2" viewBox="0 0 24 24">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              Route Comparison
+            </div>
+            <div id="ana-cmp"></div>
+          </div>
+          <div class="ecard">
+            <div class="ecard-title">
+              <svg width="13" height="13" fill="none" stroke="#e37400" stroke-width="2" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <path d="M3 9h18M9 21V9"/>
+              </svg>
+              Node Cost Breakdown
+            </div>
+            <div id="ana-nodes"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Guide tab -->
+      <div class="panel" id="panel-guide">
+        <div class="ecard">
+          <div class="ecard-title">What are Q-Values?</div>
+          <div class="ecard-body">
+            Every node on the map has a Q-value — a number the AI learned meaning <strong>"how good is it to be here?"</strong><br><br>
+            At the start, all Q-values are 0. After each step, the Bellman equation updates the value of that node.<br><br>
+            <strong style="color:var(--blue)">Enable "Q-Values" overlay</strong> after training — brighter blue = AI learned this location is valuable on the way to the goal.
+          </div>
+        </div>
+        <div class="ecard">
+          <div class="ecard-title">What is the Heatmap?</div>
+          <div class="ecard-body">
+            Shows <strong>where the agent explored</strong> during training — everywhere it wandered while learning.<br><br>
+            Early = spread everywhere (random). End = concentrated along optimal corridor.<br><br>
+            <strong style="color:var(--blue)">Enable "Heatmap" overlay</strong> — orange density circles, thick clusters = heavily explored zones.
+          </div>
+        </div>
+        <div class="ecard">
+          <div class="ecard-title">What is the Policy?</div>
+          <div class="ecard-body">
+            The agent's <strong>final decision map</strong> — at every node, an arrow showing the best direction.<br><br>
+            Nobody programmed these arrows. The agent built this entire map from scratch through trial and error.<br><br>
+            <strong style="color:var(--blue)">Enable "Policy" overlay</strong> — purple arrows forming a flow field across the city.
+          </div>
+        </div>
+        <div class="ecard">
+          <div class="ecard-title">🖱 Drag Start &amp; End Pins</div>
+          <div class="ecard-body">
+            The <strong style="color:#1e8e3e">green S pin</strong> and <strong style="color:#d93025">red G pin</strong> are fully draggable.<br><br>
+            Drag them anywhere → click <strong>▶ Learn &amp; Find Route</strong> → the agent retrains from zero.<br><br>
+            This proves the AI is genuinely learning — not following a hardcoded path.
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end #right -->
+  </div><!-- end #layout -->
+
+  <!-- Leaflet JS (must load before our script) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Our JavaScript -->
+  <script src="script.js"></script>
+
+</body>
+</html>
